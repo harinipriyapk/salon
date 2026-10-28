@@ -9,6 +9,9 @@ import feedbackRoutes from './routes/feedbackRoutes.js';
 import serviceRoutes from './routes/serviceRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import { seedInitialData } from './seedServices.js';
+import dotenv from "dotenv";
+dotenv.config();
+
 
 const app = express();
 const port = Number(process.env.PORT) || 5000;
