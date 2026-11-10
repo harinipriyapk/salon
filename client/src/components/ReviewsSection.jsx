@@ -5,7 +5,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import React from "react";
 export default function ReviewsSection({ openAuthModal }) {
-  const { user, isAuthenticated } = useAuth();
+  const { user, isAuthenticated, isAdmin } = useAuth();
   const { lang, t } = useLanguage();
 
   const [feedbackList, setFeedbackList] = useState([]);
@@ -148,7 +148,7 @@ export default function ReviewsSection({ openAuthModal }) {
       </div>
 
       {/* Verified Feedback Submission Form */}
-      <div className="feedback-form vintage-card">
+      {!isAdmin && <div className="feedback-form vintage-card">
         <div className="feedback-form-header">
           <div>
             <p className="eyebrow">{lang === 'ta' ? 'வாடிக்கையாளர் பதிவுகள்' : 'Client Reflections'}</p>
@@ -210,7 +210,7 @@ export default function ReviewsSection({ openAuthModal }) {
               >
                 {eligibleBookings.map(b => (
                   <option key={b._id} value={b._id}>
-                    {b.serviceName} on {b.date} at {b.time} (${b.servicePrice})
+                    {b.serviceName} on {b.date} at {b.time} (₹{b.totalPrice ?? b.servicePrice})
                   </option>
                 ))}
               </select>
@@ -269,8 +269,7 @@ export default function ReviewsSection({ openAuthModal }) {
             </button>
           </form>
         )}
-      </div>
+      </div>}
     </section>
   );
 }
-

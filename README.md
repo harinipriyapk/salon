@@ -57,7 +57,7 @@ cd server
 npm install
 node src/server.js
 ```
-The backend server runs on `http://localhost:5000`. On initial startup, it automatically seeds initial salon services, the default admin account, demo customer account, and sample completed bookings.
+The backend server runs on `http://localhost:5000`. In development it seeds initial salon services, local demo accounts, and sample bookings. Production disables demo seeding unless `SEED_DEMO_DATA=true` is explicitly set. See [DEPLOYMENT.md](./DEPLOYMENT.md) and `server/.env.example` before deploying.
 
 To run the automated integration tests:
 ```bash
@@ -74,14 +74,14 @@ Open `http://localhost:5173` in your browser.
 
 ---
 
-## 🔐 Demo Credentials
+## 🔐 Local Demo Credentials
 
 | Role | Email | Password |
 | --- | --- | --- |
 | **Admin** | `admin@velvetvine.com` | `AdminPass123!` |
 | **Customer** | `alice@example.com` | `AlicePass123!` |
 
-*(Both accounts can also be logged into with 1-click via the "Quick Demo Access" buttons in the Sign In modal).*
+The quick demo buttons are shown only in Vite development mode. These credentials are for local development only; create production administrators through a trusted provisioning process.
 
 ---
 

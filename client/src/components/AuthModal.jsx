@@ -94,12 +94,12 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'login', onAut
 
         <div className="modal-header">
           <span className="vintage-tag">Parlour Portal</span>
-          <h2>{tab === 'login' ? 'Client & Admin Sign In' : 'Create an Account'}</h2>
+          <h2>{tab === 'login' ? 'Client, Stylist & Admin Sign In' : 'Create an Account'}</h2>
           <p>Access your reservations, manage WhatsApp alerts, and leave verified feedback.</p>
         </div>
 
-        {/* Quick Demo Credentials Banner */}
-        <div className="demo-credentials-box">
+        {/* Demo accounts are only available for local development. */}
+        {import.meta.env.DEV && <div className="demo-credentials-box">
           <div className="demo-box-title">
             <Sparkles size={14} /> Quick Demo Access:
           </div>
@@ -121,7 +121,7 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'login', onAut
               Demo Admin (Manager)
             </button>
           </div>
-        </div>
+        </div>}
 
         {/* Tab Switcher */}
         <div className="auth-tab-bar">
@@ -158,15 +158,15 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'login', onAut
         {tab === 'login' ? (
           <form onSubmit={handleLogin} className="auth-form">
             <label>
-              <span>Email Address</span>
+              <span>Email or stylist username</span>
               <div className="input-with-icon">
                 <Mail size={16} />
                 <input
-                  type="email"
+                  type="text"
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
-                  placeholder="alice@example.com or admin@velvetvine.com"
+                  placeholder="email or ramesh@stylish1"
                   required
                 />
               </div>
@@ -265,4 +265,3 @@ export default function AuthModal({ isOpen, onClose, initialTab = 'login', onAut
     </div>
   );
 }
-

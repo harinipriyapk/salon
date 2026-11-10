@@ -1,4 +1,5 @@
-const API_BASE = import.meta.env.VITE_API_URL || 'https://salon-backend-t79s.onrender.com/api';
+const API_BASE = import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:5000/api' : 'https://salon-backend-t79s.onrender.com/api');
+const API_LOCATION = (() => { try { return new URL(API_BASE).origin; } catch { return API_BASE; } })();
 
 export function getAuthToken() {
   return localStorage.getItem('vv_token') || null;
@@ -38,18 +39,33 @@ export async function apiRequest(endpoint, options = {}) {
     ...options.headers,
   };
 
+  const retryable = !options.method || options.method.toUpperCase() === 'GET';
   let response;
-  try {
-    response = await fetch(`${API_BASE}${endpoint}`, {
-      ...options,
-      headers,
-    });
-  } catch (netErr) {
+  let netErr;
+  for (let attempt = 0; attempt < (retryable ? 3 : 1); attempt += 1) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 12000);
+    try {
+      response = await fetch(`${API_BASE}${endpoint}`, { ...options, headers, signal: options.signal || controller.signal });
+      clearTimeout(timeout);
+      if (response.ok || !retryable || ![429, 502, 503, 504].includes(response.status) || attempt === 2) break;
+      const retryAfter = Number(response.headers.get('Retry-After'));
+      await new Promise((resolve) => setTimeout(resolve, retryAfter ? Math.min(retryAfter * 1000, 3000) : 250 * (2 ** attempt) + Math.random() * 150));
+    } catch (error) {
+      clearTimeout(timeout);
+      netErr = error;
+      if (!retryable || attempt === 2) break;
+      await new Promise((resolve) => setTimeout(resolve, 250 * (2 ** attempt) + Math.random() * 150));
+    }
+  }
+  if (!response) {
     console.error(`API Network Failure [${endpoint}]:`, netErr);
     const err = new Error(
-      netErr.message?.includes('fetch')
-        ? 'Cannot connect to backend server. Please ensure http://localhost:5000 is running.'
-        : netErr.message || 'Network request failed'
+      netErr?.name === 'AbortError'
+        ? 'The server took too long to respond. Please try again.'
+        : netErr?.message?.includes('fetch')
+        ? `Cannot connect to API at ${API_LOCATION}. Check that the backend is running and VITE_API_URL is correct.`
+        : netErr?.message || 'Network request failed'
     );
     err.original = netErr;
     throw err;
@@ -61,6 +77,7 @@ export async function apiRequest(endpoint, options = {}) {
     const error = new Error(data.message || `Request failed with status ${response.status}`);
     error.status = response.status;
     error.data = data;
+    error.requestId = response.headers.get('X-Request-Id') || data.requestId;
     throw error;
   }
 
@@ -82,11 +99,12 @@ export const api = {
   deleteService: (id) => apiRequest(`/services/${id}`, { method: 'DELETE' }),
 
   // Bookings
-  getAvailability: (date) => apiRequest(`/bookings/availability?date=${date}`),
+  getAvailability: (date, stylistId) => apiRequest(`/bookings/availability?date=${encodeURIComponent(date)}${stylistId ? `&stylistId=${encodeURIComponent(stylistId)}` : ''}`),
   getBookings: (params = {}) => {
     const query = new URLSearchParams(params).toString();
     return apiRequest(`/bookings${query ? `?${query}` : ''}`);
   },
+  getRevenueSummary: () => apiRequest('/bookings/summary/revenue'),
   getBookingById: (id) => apiRequest(`/bookings/${id}`),
   createBooking: (data) => apiRequest('/bookings', { method: 'POST', body: JSON.stringify(data) }),
   updateBooking: (id, data) => apiRequest(`/bookings/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
@@ -109,4 +127,3 @@ export const api = {
   getNotifications: () => apiRequest('/notifications'),
   sendTestNotification: (data) => apiRequest('/notifications/test', { method: 'POST', body: JSON.stringify(data) }),
 };
-

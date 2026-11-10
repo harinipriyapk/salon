@@ -8,7 +8,7 @@ import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import React from "react";
 export default function UserDashboard({ isOpen, onClose, services = [] }) {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const { lang, t } = useLanguage();
 
   const [bookings, setBookings] = useState([]);
@@ -35,7 +35,7 @@ export default function UserDashboard({ isOpen, onClose, services = [] }) {
     try {
       const [bookingsRes, eligibleRes] = await Promise.all([
         api.getBookings(),
-        api.getEligibleBookings(),
+        isAdmin ? Promise.resolve({ success: true, eligibleBookings: [] }) : api.getEligibleBookings(),
       ]);
 
       if (bookingsRes.success) {
@@ -83,7 +83,7 @@ export default function UserDashboard({ isOpen, onClose, services = [] }) {
       if (!editForm.date) return;
       setEditSlotsLoading(true);
       try {
-        const res = await api.getAvailability(editForm.date);
+        const res = await api.getAvailability(editForm.date, editingBooking?.stylistId);
         if (res.success) {
           setEditSlots(res.slots || []);
         }
@@ -190,7 +190,7 @@ export default function UserDashboard({ isOpen, onClose, services = [] }) {
           <X size={20} />
         </button>
 
-        <div className="modal-header">
+      <div className="modal-header">
           <span className="vintage-tag">Client Dashboard</span>
           <h2>Welcome, {user?.name || 'Valued Guest'}</h2>
           <p>View, edit, or cancel your chair reservations and share feedback on your parlour experiences.</p>
@@ -205,13 +205,13 @@ export default function UserDashboard({ isOpen, onClose, services = [] }) {
           >
             My Reservations ({bookings.length})
           </button>
-          <button
+          {!isAdmin && <button
             type="button"
             className={`auth-tab ${activeTab === 'feedback' ? 'active' : ''}`}
             onClick={() => setActiveTab('feedback')}
           >
             Leave Feedback ({eligibleBookings.length} Eligible)
-          </button>
+          </button>}
         </div>
 
         {message.text && (
@@ -252,7 +252,13 @@ export default function UserDashboard({ isOpen, onClose, services = [] }) {
                         <div className="item-meta">
                           <span><Calendar size={13} /> {b.date}</span>
                           <span><Clock size={13} /> {b.time} ({b.durationMinutes}m)</span>
-                          <span><strong>${b.servicePrice}</strong></span>
+                          <span><Scissors size={13} /> {b.stylistName || 'Suresh'}</span>
+                          <span><strong>₹{b.totalPrice ?? b.servicePrice}</strong></span>
+                        </div>
+                        <div className="bill-breakdown">
+                          <span>Service <strong>₹{b.servicePrice}</strong></span>
+                          <span>Stylist fee <strong>₹{b.stylistExtra || 0}</strong></span>
+                          <span>Total bill <strong>₹{b.totalPrice ?? b.servicePrice}</strong></span>
                         </div>
                         {b.notes && <p className="item-notes">"{b.notes}"</p>}
                         <div className="item-wa-status">
@@ -313,7 +319,7 @@ export default function UserDashboard({ isOpen, onClose, services = [] }) {
                             </button>
                           </>
                         )}
-                        {isCompleted && (
+                        {isCompleted && !isAdmin && (
                           <button
                             type="button"
                             className="button button-dark item-btn"
@@ -338,7 +344,7 @@ export default function UserDashboard({ isOpen, onClose, services = [] }) {
         )}
 
         {/* Tab 2: Submit Feedback after appointment */}
-        {activeTab === 'feedback' && (
+        {activeTab === 'feedback' && !isAdmin && (
           <div className="dashboard-content">
             <div className="feedback-flow-card">
               <div className="feedback-flow-header">
@@ -366,7 +372,7 @@ export default function UserDashboard({ isOpen, onClose, services = [] }) {
                     >
                       {eligibleBookings.map(b => (
                         <option key={b._id} value={b._id}>
-                          {b.serviceName} ({b.date} at {b.time}) — ${b.servicePrice}
+                          {b.serviceName} ({b.date} at {b.time}) — ₹{b.totalPrice ?? b.servicePrice}
                         </option>
                       ))}
                     </select>
@@ -494,4 +500,3 @@ export default function UserDashboard({ isOpen, onClose, services = [] }) {
     </div>
   );
 }
-

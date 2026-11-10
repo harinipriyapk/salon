@@ -65,13 +65,11 @@ export function AuthProvider({ children }) {
     setUserState(null);
   };
 
-  // 1-Click Demo Login
-  const demoLogin = async (role = 'customer') => {
-    if (role === 'admin') {
-      return login('admin@velvetvine.com', 'AdminPass123!');
-    }
+  // Demo credentials are compiled into development builds only.
+  const demoLogin = import.meta.env.DEV ? async (role = 'customer') => {
+    if (role === 'admin') return login('admin@velvetvine.com', 'AdminPass123!');
     return login('alice@example.com', 'AlicePass123!');
-  };
+  } : undefined;
 
   const value = {
     user,
@@ -79,6 +77,7 @@ export function AuthProvider({ children }) {
     loading,
     isAuthenticated: !!token && !!user,
     isAdmin: user?.role === 'admin',
+    isStylist: user?.role === 'stylist',
     login,
     register,
     logout,
@@ -95,4 +94,3 @@ export function useAuth() {
   }
   return context;
 }
-

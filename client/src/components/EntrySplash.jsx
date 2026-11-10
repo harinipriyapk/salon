@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { motion } from 'framer-motion';
-import { Scissors, Sparkles, ArrowRight } from 'lucide-react';
+import { Scissors } from 'lucide-react';
 import { SALON_STICKER, SALON_STICKER_ALT } from '../config/entrySticker';
 import { useLanguage } from '../context/LanguageContext';
 import React from 'react';
@@ -9,6 +9,7 @@ export default function EntrySplash({ onFinish }) {
   const { lang, t } = useLanguage();
   const [phraseIndex, setPhraseIndex] = useState(0);
   const [isExiting, setIsExiting] = useState(false);
+  const exitStarted = useRef(false);
 
   const phrases = lang === 'ta'
     ? [
@@ -22,7 +23,7 @@ export default function EntrySplash({ onFinish }) {
         'Brewing fresh parlour tea...',
         'Preparing your styling chair...',
         'Warming the fresh towels...',
-        'Checking slot availability...',
+        'Finding your perfect style...',
         'Welcome to Velvet & Vine...',
       ];
 
@@ -38,6 +39,8 @@ export default function EntrySplash({ onFinish }) {
   }, [phrases.length]);
 
   const triggerExit = () => {
+    if (exitStarted.current) return;
+    exitStarted.current = true;
     setIsExiting(true);
     setTimeout(() => {
       if (onFinishRef.current) {

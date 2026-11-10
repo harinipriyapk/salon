@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import {
   Calendar, Clock, Scissors, MessageSquare, Star, CheckCircle, XCircle,
   AlertCircle, BarChart2, Bell, RefreshCw, X, ExternalLink, Send,
-  Trash2, Eye, EyeOff, User, Phone, Search
+  Trash2, Eye, EyeOff, User, Phone, Search, Receipt
 } from 'lucide-react';
 import { api } from '../services/api';
 import { useAuth } from '../context/AuthContext';
@@ -21,6 +21,10 @@ export default function AdminDashboard({ isOpen, onClose }) {
   const [analytics, setAnalytics] = useState(null);
   const [notifications, setNotifications] = useState([]);
   const [services, setServices] = useState([]);
+  const [stylistSchedule, setStylistSchedule] = useState([]);
+  const [revenueSummary, setRevenueSummary] = useState(null);
+  const [billBookings, setBillBookings] = useState([]);
+  const [scheduleDate, setScheduleDate] = useState(new Date(Date.now() - new Date().getTimezoneOffset() * 60000).toISOString().slice(0, 10));
 
   const [statusFilter, setStatusFilter] = useState('all');
   const [searchQuery, setSearchQuery] = useState('');
@@ -34,12 +38,14 @@ export default function AdminDashboard({ isOpen, onClose }) {
   const loadAllData = async () => {
     setLoading(true);
     try {
-      const [bRes, aRes, fRes, nRes, sRes] = await Promise.all([
+      const [bRes, aRes, fRes, nRes, sRes, revenueRes, billsRes] = await Promise.all([
         api.getBookings({ status: statusFilter, search: searchQuery }),
         api.getFeedbackAnalytics(),
         api.getAdminFeedback(),
         api.getNotifications(),
         api.getAllServicesAdmin(),
+        api.getRevenueSummary(),
+        api.getBookings({ status: 'all', limit: 100 }),
       ]);
 
       if (bRes.success) setBookings(bRes.bookings || []);
@@ -47,6 +53,8 @@ export default function AdminDashboard({ isOpen, onClose }) {
       if (fRes.success) setFeedbackList(fRes.feedback || []);
       if (nRes.success) setNotifications(nRes.notifications || []);
       if (sRes.success) setServices(sRes.services || []);
+      if (revenueRes.success) setRevenueSummary(revenueRes.revenue || null);
+      if (billsRes.success) setBillBookings(billsRes.bookings || []);
     } catch (err) {
       console.warn('Could not load admin dashboard data:', err.message);
     } finally {
@@ -61,6 +69,13 @@ export default function AdminDashboard({ isOpen, onClose }) {
     }
   }, [isOpen, statusFilter]);
 
+  useEffect(() => {
+    if (!isOpen || activeTab !== 'stylists') return;
+    api.getBookings({ date: scheduleDate, status: 'all', limit: 100 })
+      .then((res) => setStylistSchedule(res.bookings || []))
+      .catch((err) => setActionMessage({ type: 'error', text: err.message || 'Could not load stylist schedules.' }));
+  }, [isOpen, activeTab, scheduleDate]);
+
   const handleSearch = (e) => {
     e.preventDefault();
     loadAllData();
@@ -70,15 +85,12 @@ export default function AdminDashboard({ isOpen, onClose }) {
     try {
       const res = await api.updateBooking(bookingId, { status: newStatus });
       if (res.success) {
+        const statusMessage = newStatus === 'completed'
+          ? (res.booking?.feedbackReminderSent ? 'Customer feedback reminder sent by WhatsApp.' : 'No feedback reminder was sent for this booking.')
+          : newStatus === 'cancelled' ? 'Cancellation WhatsApp notification sent to both parties.' : '';
         setActionMessage({
           type: 'success',
-          text: `Booking updated to ${newStatus}. ${
-            newStatus === 'completed'
-              ? 'WhatsApp feedback reminder dispatched to customer!'
-              : newStatus === 'cancelled'
-              ? 'Cancellation WhatsApp notification sent to both parties.'
-              : ''
-          }`,
+          text: `Booking updated to ${newStatus}. ${statusMessage}`,
         });
         await loadAllData();
       }
@@ -169,6 +181,20 @@ export default function AdminDashboard({ isOpen, onClose }) {
             onClick={() => setActiveTab('bookings')}
           >
             <Calendar size={14} /> Bookings ({bookings.length})
+          </button>
+          <button
+            type="button"
+            className={`auth-tab ${activeTab === 'stylists' ? 'active' : ''}`}
+            onClick={() => setActiveTab('stylists')}
+          >
+            <Scissors size={14} /> Stylist Schedule
+          </button>
+          <button
+            type="button"
+            className={`auth-tab ${activeTab === 'billing' ? 'active' : ''}`}
+            onClick={() => setActiveTab('billing')}
+          >
+            <Receipt size={14} /> Revenue & Bills
           </button>
           <button
             type="button"
@@ -268,7 +294,9 @@ export default function AdminDashboard({ isOpen, onClose }) {
                         </td>
                         <td>
                           <strong>{b.serviceName}</strong>
-                          <div className="sub-detail">${b.servicePrice} · {b.durationMinutes}m</div>
+                          <div className="sub-detail">₹{b.totalPrice ?? b.servicePrice} · {b.durationMinutes}m</div>
+                          <div className="sub-detail">Service ₹{b.servicePrice} + stylist ₹{b.stylistExtra || 0}</div>
+                          <div className="sub-detail">Stylist: {b.stylistName || 'Unassigned'}</div>
                           {b.notes && <div className="sub-detail notes-preview">"{b.notes}"</div>}
                         </td>
                         <td>
@@ -296,7 +324,7 @@ export default function AdminDashboard({ isOpen, onClose }) {
                               </button>
                             )}
 
-                            {b.status === 'completed' && (
+                            {b.status === 'completed' && !(String(b.userId) === String(user?.id || user?._id)) && (
                               <button
                                 type="button"
                                 className="button button-outline table-btn"
@@ -350,7 +378,68 @@ export default function AdminDashboard({ isOpen, onClose }) {
           </div>
         )}
 
+        {activeTab === 'billing' && (
+          <div className="admin-content">
+            <div className="analytics-kpi-grid revenue-kpi-grid">
+              <div className="kpi-card"><span className="kpi-label">Completed revenue</span><div className="kpi-value"><span>₹{revenueSummary?.completedRevenue || 0}</span></div><span className="kpi-sub">Value of completed bookings</span></div>
+              <div className="kpi-card"><span className="kpi-label">This month</span><div className="kpi-value"><span>₹{revenueSummary?.currentMonthCompletedRevenue || 0}</span></div><span className="kpi-sub">Completed booking value this month</span></div>
+              <div className="kpi-card"><span className="kpi-label">Upcoming booking value</span><div className="kpi-value"><span>₹{revenueSummary?.scheduledValue || 0}</span></div><span className="kpi-sub">Confirmed and pending bookings</span></div>
+              <div className="kpi-card"><span className="kpi-label">Completed appointments</span><div className="kpi-value"><span>{revenueSummary?.completedBookings || 0}</span></div><span className="kpi-sub">Revenue is based on completed services</span></div>
+            </div>
+            <p className="revenue-note">Payment collection is not tracked in this app; these figures are calculated from booking status and bill totals.</p>
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead><tr><th>Bill / Client</th><th>Service</th><th>Stylist</th><th>Appointment</th><th>Bill Total</th></tr></thead>
+                <tbody>
+                  {billBookings.map(b => (
+                    <tr key={b._id}>
+                      <td><strong>#{b._id.slice(-6).toUpperCase()}</strong><div className="sub-detail">{b.clientName}</div></td>
+                      <td><strong>{b.serviceName}</strong><div className="sub-detail">Service charge ₹{b.servicePrice}</div></td>
+                      <td>{b.stylistName || 'Suresh'}<div className="sub-detail">{b.stylistExtra ? `Premium fee ₹${b.stylistExtra}` : 'No extra fee'}</div></td>
+                      <td>{b.date}<div className="sub-detail">{b.time} · {b.status}</div></td>
+                      <td><strong>₹{b.totalPrice ?? b.servicePrice}</strong></td>
+                    </tr>
+                  ))}
+                  {!billBookings.length && <tr><td colSpan="5">No bills yet.</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
         {/* TAB 2: FEEDBACK ANALYTICS */}
+        {activeTab === 'stylists' && (
+          <div className="admin-content">
+            <div className="admin-controls-bar">
+              <label className="schedule-date-control">Compare schedules for <input type="date" value={scheduleDate} onChange={e => setScheduleDate(e.target.value)} /></label>
+              <button type="button" className="button button-outline" onClick={() => api.getBookings({ date: scheduleDate, status: 'all', limit: 100 }).then(res => setStylistSchedule(res.bookings || []))}>
+                <RefreshCw size={14} /> Refresh
+              </button>
+            </div>
+            <div className="stylist-schedule-grid">
+              {[
+                { id: 'ramesh@stylish1', name: 'Ramesh', premium: true },
+                { id: 'suresh@stylish2', name: 'Suresh', premium: false },
+                { id: 'rajesh@stylish3', name: 'Rajesh', premium: false },
+              ].map(stylist => {
+                const entries = stylistSchedule.filter(b => (b.stylistId || 'suresh@stylish2') === stylist.id && b.status !== 'cancelled').sort((a, b) => a.time.localeCompare(b.time));
+                return (
+                  <section className="stylist-schedule-card" key={stylist.id}>
+                    <header><div><h3>{stylist.name}</h3><small>{stylist.id}</small></div><span>{stylist.premium ? 'Premium · +₹100' : 'Stylist'}</span></header>
+                    <strong className="stylist-booking-count">{entries.length} bookings</strong>
+                    {entries.length ? entries.map(item => (
+                      <article className="stylist-slot-item" key={item._id}>
+                        <b>{item.time}</b><span>{item.clientName} · {item.serviceName}</span><small>₹{item.totalPrice ?? item.servicePrice} · {item.status}</small>
+                      </article>
+                    )) : <p className="stylist-schedule-empty">No bookings for this date.</p>}
+                  </section>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* TAB 3: FEEDBACK ANALYTICS */}
         {activeTab === 'analytics' && (
           <div className="admin-content">
             {/* KPI Summary Cards */}
@@ -574,4 +663,3 @@ export default function AdminDashboard({ isOpen, onClose }) {
     </div>
   );
 }
-
